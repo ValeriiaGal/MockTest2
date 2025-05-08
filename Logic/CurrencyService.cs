@@ -39,6 +39,7 @@ public class CurrencyService : ICurrencyService
             var currencyIdObj = await getCurrencyIdCmd.ExecuteScalarAsync();
 
             int currencyId;
+            
 
             if (currencyIdObj != null)
             {
