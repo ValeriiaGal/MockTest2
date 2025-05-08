@@ -21,7 +21,6 @@ public class CurrencyService : ICurrencyService
 
         try
         {
-            // Validate countries and collect their IDs
             var countryIds = new List<int>();
             foreach (var country in request.Countries)
             {
@@ -33,14 +32,11 @@ public class CurrencyService : ICurrencyService
                 countryIds.Add(Convert.ToInt32(result));
             }
 
-            // Check if currency exists
             var getCurrencyIdCmd = new SqlCommand("SELECT Id FROM Currency WHERE Name = @Name", conn, transaction);
             getCurrencyIdCmd.Parameters.AddWithValue("@Name", request.CurrencyName);
             var currencyIdObj = await getCurrencyIdCmd.ExecuteScalarAsync();
 
             int currencyId;
-            
-
             if (currencyIdObj != null)
             {
                 currencyId = Convert.ToInt32(currencyIdObj);
@@ -62,7 +58,6 @@ public class CurrencyService : ICurrencyService
                 currencyId = Convert.ToInt32(inserted);
             }
 
-            // Link currency to countries
             foreach (var countryId in countryIds)
             {
                 var checkCmd = new SqlCommand(
@@ -158,5 +153,156 @@ public class CurrencyService : ICurrencyService
         {
             throw new ArgumentException("Invalid type. Expected: 'Country' or 'Currency'");
         }
+    }
+
+    public async Task<IEnumerable<Currency>> GetAllCurrencies()
+    {
+        var result = new List<Currency>();
+        using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+        var cmd = new SqlCommand("SELECT Id, Name, Rate FROM Currency", conn);
+        var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            result.Add(new Currency
+            {
+                Id = reader.GetInt32(0),
+                Name = reader.GetString(1),
+                Rate = reader.GetFloat(2)
+            });
+        }
+        await reader.CloseAsync();
+        return result;
+    }
+
+    public async Task<IEnumerable<Country>> GetAllCountries()
+    {
+        var result = new List<Country>();
+        using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+        var cmd = new SqlCommand("SELECT Id, Name FROM Country", conn);
+        var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            result.Add(new Country
+            {
+                Id = reader.GetInt32(0),
+                Name = reader.GetString(1)
+            });
+        }
+        await reader.CloseAsync();
+        return result;
+    }
+
+    public async Task<bool> DeleteCurrencyByName(string name)
+    {
+        using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+        var transaction = conn.BeginTransaction();
+        try
+        {
+            var getIdCmd = new SqlCommand("SELECT Id FROM Currency WHERE Name = @name", conn, transaction);
+            getIdCmd.Parameters.AddWithValue("@name", name);
+            var idObj = await getIdCmd.ExecuteScalarAsync();
+            if (idObj == null) return false;
+            int id = Convert.ToInt32(idObj);
+
+            var deleteLinks = new SqlCommand("DELETE FROM Currency_Country WHERE Currency_Id = @id", conn, transaction);
+            deleteLinks.Parameters.AddWithValue("@id", id);
+            await deleteLinks.ExecuteNonQueryAsync();
+
+            var deleteCurrency = new SqlCommand("DELETE FROM Currency WHERE Id = @id", conn, transaction);
+            deleteCurrency.Parameters.AddWithValue("@id", id);
+            await deleteCurrency.ExecuteNonQueryAsync();
+
+            await transaction.CommitAsync();
+            return true;
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    public async Task<bool> DeleteCountryById(int id)
+    {
+        using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+        var transaction = conn.BeginTransaction();
+        try
+        {
+            var deleteLinks = new SqlCommand("DELETE FROM Currency_Country WHERE Country_Id = @id", conn, transaction);
+            deleteLinks.Parameters.AddWithValue("@id", id);
+            await deleteLinks.ExecuteNonQueryAsync();
+
+            var deleteCountry = new SqlCommand("DELETE FROM Country WHERE Id = @id", conn, transaction);
+            deleteCountry.Parameters.AddWithValue("@id", id);
+            int rows = await deleteCountry.ExecuteNonQueryAsync();
+
+            await transaction.CommitAsync();
+            return rows > 0;
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    public async Task<bool> UpdateCurrencyRate(string name, float rate)
+    {
+        using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+        var cmd = new SqlCommand("UPDATE Currency SET Rate = @rate WHERE Name = @name", conn);
+        cmd.Parameters.AddWithValue("@rate", rate);
+        cmd.Parameters.AddWithValue("@name", name);
+        return await cmd.ExecuteNonQueryAsync() > 0;
+    }
+
+    public async Task<IEnumerable<Country>?> GetCountriesForCurrency(string currencyName)
+    {
+        var result = new List<Country>();
+        using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+        var cmd = new SqlCommand(@"SELECT c.Id, c.Name FROM Country c 
+                                JOIN Currency_Country cc ON c.Id = cc.Country_Id 
+                                JOIN Currency cur ON cur.Id = cc.Currency_Id 
+                                WHERE cur.Name = @name", conn);
+        cmd.Parameters.AddWithValue("@name", currencyName);
+        var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            result.Add(new Country
+            {
+                Id = reader.GetInt32(0),
+                Name = reader.GetString(1)
+            });
+        }
+        await reader.CloseAsync();
+        return result.Count > 0 ? result : null;
+    }
+
+    public async Task<object?> GetCurrenciesForCountry(string countryName)
+    {
+        var result = new List<object>();
+        using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+        var cmd = new SqlCommand(@"SELECT cur.Name, cur.Rate FROM Currency cur
+                                JOIN Currency_Country cc ON cur.Id = cc.Currency_Id
+                                JOIN Country c ON c.Id = cc.Country_Id
+                                WHERE c.Name = @name", conn);
+        cmd.Parameters.AddWithValue("@name", countryName);
+        var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            result.Add(new
+            {
+                Name = reader.GetString(0),
+                Rate = reader.GetFloat(1)
+            });
+        }
+        await reader.CloseAsync();
+        return result.Count > 0 ? new { Name = countryName, Currencies = result } : null;
     }
 }
