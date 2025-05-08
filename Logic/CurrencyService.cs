@@ -12,91 +12,73 @@ public class CurrencyService : ICurrencyService
     {
         _connectionString = connectionString;
     }
-    
+
     public async Task<bool> AddCurrency(CurrencyRequestDTO request)
-{
-    using (var conn = new SqlConnection(_connectionString))
     {
+        using var conn = new SqlConnection(_connectionString);
         await conn.OpenAsync();
         var transaction = conn.BeginTransaction();
 
         try
         {
-            // Validate all countries exist and retrieve their IDs
-            var countryIds = new Dictionary<string, int>();
+            // Validate countries and collect their IDs
+            var countryIds = new List<int>();
             foreach (var country in request.Countries)
             {
-                var sqlCountryId = "SELECT Id FROM Country WHERE Name = @CountryName";
-                using var cmd = new SqlCommand(sqlCountryId, conn, transaction);
-                cmd.Parameters.AddWithValue("@CountryName", country.Name);
-                var reader = await cmd.ExecuteReaderAsync();
-
-                if (!await reader.ReadAsync())
-                {
-                    await reader.CloseAsync();
+                var cmd = new SqlCommand("SELECT Id FROM Country WHERE Name = @Name", conn, transaction);
+                cmd.Parameters.AddWithValue("@Name", country.Name);
+                var result = await cmd.ExecuteScalarAsync();
+                if (result == null)
                     throw new Exception($"Country '{country.Name}' doesn't exist.");
-                }
-
-                int countryId = reader.GetInt32(0);
-                countryIds[country.Name] = countryId;
-                await reader.CloseAsync();
+                countryIds.Add(Convert.ToInt32(result));
             }
 
             // Check if currency exists
+            var getCurrencyIdCmd = new SqlCommand("SELECT Id FROM Currency WHERE Name = @Name", conn, transaction);
+            getCurrencyIdCmd.Parameters.AddWithValue("@Name", request.CurrencyName);
+            var currencyIdObj = await getCurrencyIdCmd.ExecuteScalarAsync();
+
             int currencyId;
-            var checkCurrencySql = "SELECT Id FROM Currency WHERE Name = @CurrencyName";
-            using (var cmd = new SqlCommand(checkCurrencySql, conn, transaction))
+
+            if (currencyIdObj != null)
             {
-                cmd.Parameters.AddWithValue("@CurrencyName", request.CurrencyName);
-                var result = await cmd.ExecuteScalarAsync();
-
-                if (result != null)
-                {
-                    // Currency exists – update
-                    currencyId = Convert.ToInt32(result);
-                    var updateSql = "UPDATE Currency SET Rate = @Rate WHERE Id = @Id";
-                    using var updateCmd = new SqlCommand(updateSql, conn, transaction);
-                    updateCmd.Parameters.AddWithValue("@Rate", request.Rate);
-                    updateCmd.Parameters.AddWithValue("@Id", currencyId);
-
-                    if (await updateCmd.ExecuteNonQueryAsync() == 0)
-                        throw new Exception("Failed to update currency rate.");
-                }
-                else
-                {
-                    // Currency does not exist – insert
-                    var insertSql = "INSERT INTO Currency (Name, Rate) VALUES (@Name, @Rate); SELECT SCOPE_IDENTITY();";
-                    using var insertCmd = new SqlCommand(insertSql, conn, transaction);
-                    insertCmd.Parameters.AddWithValue("@Name", request.CurrencyName);
-                    insertCmd.Parameters.AddWithValue("@Rate", request.Rate);
-
-                    var inserted = await insertCmd.ExecuteScalarAsync();
-                    if (inserted == null)
-                        throw new Exception("Failed to insert new currency.");
-
-                    currencyId = Convert.ToInt32(inserted);
-                }
+                currencyId = Convert.ToInt32(currencyIdObj);
+                var updateCmd = new SqlCommand("UPDATE Currency SET Rate = @Rate WHERE Id = @Id", conn, transaction);
+                updateCmd.Parameters.AddWithValue("@Rate", request.Rate);
+                updateCmd.Parameters.AddWithValue("@Id", currencyId);
+                await updateCmd.ExecuteNonQueryAsync();
+            }
+            else
+            {
+                var insertCmd = new SqlCommand(
+                    "INSERT INTO Currency (Name, Rate) VALUES (@Name, @Rate); SELECT SCOPE_IDENTITY();",
+                    conn, transaction);
+                insertCmd.Parameters.AddWithValue("@Name", request.CurrencyName);
+                insertCmd.Parameters.AddWithValue("@Rate", request.Rate);
+                var inserted = await insertCmd.ExecuteScalarAsync();
+                if (inserted == null)
+                    throw new Exception("Failed to insert new currency.");
+                currencyId = Convert.ToInt32(inserted);
             }
 
-            // Map to countries (if not already mapped)
-            foreach (var (countryName, countryId) in countryIds)
+            // Link currency to countries
+            foreach (var countryId in countryIds)
             {
-                var checkMapSql = @"SELECT 1 FROM Currency_Country 
-                                    WHERE Country_Id = @CountryId AND Currency_Id = @CurrencyId";
-                using var checkCmd = new SqlCommand(checkMapSql, conn, transaction);
+                var checkCmd = new SqlCommand(
+                    "SELECT 1 FROM Currency_Country WHERE Country_Id = @CountryId AND Currency_Id = @CurrencyId",
+                    conn, transaction);
                 checkCmd.Parameters.AddWithValue("@CountryId", countryId);
                 checkCmd.Parameters.AddWithValue("@CurrencyId", currencyId);
-
                 var exists = await checkCmd.ExecuteScalarAsync();
+
                 if (exists == null)
                 {
-                    var insertMapSql = "INSERT INTO Currency_Country (Country_Id, Currency_Id) VALUES (@CountryId, @CurrencyId)";
-                    using var insertCmd = new SqlCommand(insertMapSql, conn, transaction);
-                    insertCmd.Parameters.AddWithValue("@CountryId", countryId);
-                    insertCmd.Parameters.AddWithValue("@CurrencyId", currencyId);
-
-                    if (await insertCmd.ExecuteNonQueryAsync() == 0)
-                        throw new Exception("Failed to map currency to country.");
+                    var insertMap = new SqlCommand(
+                        "INSERT INTO Currency_Country (Country_Id, Currency_Id) VALUES (@CountryId, @CurrencyId)",
+                        conn, transaction);
+                    insertMap.Parameters.AddWithValue("@CountryId", countryId);
+                    insertMap.Parameters.AddWithValue("@CurrencyId", currencyId);
+                    await insertMap.ExecuteNonQueryAsync();
                 }
             }
 
@@ -113,73 +95,67 @@ public class CurrencyService : ICurrencyService
             await conn.CloseAsync();
         }
     }
-}
-
 
     public async Task<object?> SearchCurrency(string type, string query)
     {
-        using (var conn = new SqlConnection(_connectionString))
+        using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        if (type == "Country")
         {
-            try
+            const string sql = @"
+                SELECT cur.Name, cur.Rate
+                FROM Currency cur
+                JOIN Currency_Country cc ON cur.Id = cc.Currency_Id
+                JOIN Country c ON c.Id = cc.Country_Id
+                WHERE c.Name = @query";
+
+            using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@query", query);
+            var reader = await cmd.ExecuteReaderAsync();
+
+            var currencies = new List<object>();
+            while (await reader.ReadAsync())
             {
-                await conn.OpenAsync();
-                if (type == "Country")
+                currencies.Add(new
                 {
-                    var sqlQuery =
-                        "SELECT cur.Name, cur.Rate FROM currency cur JOIN Currency_Country CC on cur.Id = CC.Currency_Id JOIN Country C on C.Id = CC.Country_Id where C.Name = @query";
-
-                    using (var cmd = new SqlCommand(sqlQuery, conn))
-                    {
-                        cmd.Parameters.AddWithValue("@query", query);
-                        var reader = await cmd.ExecuteReaderAsync();
-                        
-                        var results = new List<object?>();
-
-                        while (await reader.ReadAsync())
-                        {
-                            results.Add(new { Name = reader.GetString(0), Rate = reader.GetFloat(1) });
-                        }
-
-                        await reader.CloseAsync();
-                        
-                        return new { Name = query, Currencies = results };
-                    }
-                }
-                else if (type == "Currency")
-                {
-                    var sqlQuery =
-                        "SELECT * from Country country join Currency_Country CC on country.Id = CC.Country_Id join Currency cur ON cur.Id = CC.Currency_Id where cur.Name = @query";
-
-                    using (var cmd = new SqlCommand(sqlQuery, conn))
-                    {
-                        cmd.Parameters.AddWithValue("@query", query);
-                        var reader = await cmd.ExecuteReaderAsync();
-                        
-                        var results = new List<Country>();
-
-                        while (await reader.ReadAsync())
-                        {
-                            results.Add(new Country
-                            {
-                                Id = reader.GetInt32(0),
-                                Name = reader.GetString(1)
-                            });
-                        }
-                        
-                        await reader.CloseAsync();
-
-                        return results.IsNullOrEmpty() ? null : results;
-                    }
-                }
-                else
-                {
-                    throw new Exception("Invalid type. Expected: [Country, Currency]");
-                }
+                    Name = reader.GetString(0),
+                    Rate = reader.GetFloat(1)
+                });
             }
-            finally
+
+            await reader.CloseAsync();
+            return new { Name = query, Currencies = currencies };
+        }
+        else if (type == "Currency")
+        {
+            const string sql = @"
+                SELECT c.Id, c.Name
+                FROM Country c
+                JOIN Currency_Country cc ON c.Id = cc.Country_Id
+                JOIN Currency cur ON cur.Id = cc.Currency_Id
+                WHERE cur.Name = @query";
+
+            using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@query", query);
+            var reader = await cmd.ExecuteReaderAsync();
+
+            var countries = new List<Country>();
+            while (await reader.ReadAsync())
             {
-                await conn.CloseAsync();
+                countries.Add(new Country
+                {
+                    Id = reader.GetInt32(0),
+                    Name = reader.GetString(1)
+                });
             }
+
+            await reader.CloseAsync();
+            return countries.Count > 0 ? countries : null;
+        }
+        else
+        {
+            throw new ArgumentException("Invalid type. Expected: 'Country' or 'Currency'");
         }
     }
 }

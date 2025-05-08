@@ -13,3 +13,6 @@ C:\Users\Lera\Desktop\MockTest2\Logic\obj\Debug\net8.0\Logic.dll
 C:\Users\Lera\Desktop\MockTest2\Logic\obj\Debug\net8.0\refint\Logic.dll
 C:\Users\Lera\Desktop\MockTest2\Logic\obj\Debug\net8.0\Logic.pdb
 C:\Users\Lera\Desktop\MockTest2\Logic\obj\Debug\net8.0\ref\Logic.dll
+C:\Users\Lera\Desktop\MockTest2\Logic\bin\Debug\net8.0\DTO.dll
+C:\Users\Lera\Desktop\MockTest2\Logic\bin\Debug\net8.0\DTO.pdb
+C:\Users\Lera\Desktop\MockTest2\Logic\obj\Debug\net8.0\Logic.sourcelink.json

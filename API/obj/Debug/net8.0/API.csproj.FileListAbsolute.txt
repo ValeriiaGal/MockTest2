@@ -80,3 +80,6 @@ C:\Users\Lera\Desktop\MockTest2\API\obj\Debug\net8.0\refint\API.dll
 C:\Users\Lera\Desktop\MockTest2\API\obj\Debug\net8.0\API.pdb
 C:\Users\Lera\Desktop\MockTest2\API\obj\Debug\net8.0\API.genruntimeconfig.cache
 C:\Users\Lera\Desktop\MockTest2\API\obj\Debug\net8.0\ref\API.dll
+C:\Users\Lera\Desktop\MockTest2\API\bin\Debug\net8.0\DTO.dll
+C:\Users\Lera\Desktop\MockTest2\API\bin\Debug\net8.0\DTO.pdb
+C:\Users\Lera\Desktop\MockTest2\API\obj\Debug\net8.0\API.sourcelink.json
