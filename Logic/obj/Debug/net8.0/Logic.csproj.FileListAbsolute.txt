@@ -1,0 +1,15 @@
+C:\Users\Lera\Desktop\MockTest2\Logic\obj\Debug\net8.0\Logic.csproj.AssemblyReference.cache
+C:\Users\Lera\Desktop\MockTest2\Logic\obj\Debug\net8.0\Logic.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Lera\Desktop\MockTest2\Logic\obj\Debug\net8.0\Logic.AssemblyInfoInputs.cache
+C:\Users\Lera\Desktop\MockTest2\Logic\obj\Debug\net8.0\Logic.AssemblyInfo.cs
+C:\Users\Lera\Desktop\MockTest2\Logic\obj\Debug\net8.0\Logic.csproj.CoreCompileInputs.cache
+C:\Users\Lera\Desktop\MockTest2\Logic\bin\Debug\net8.0\Logic.deps.json
+C:\Users\Lera\Desktop\MockTest2\Logic\bin\Debug\net8.0\Logic.dll
+C:\Users\Lera\Desktop\MockTest2\Logic\bin\Debug\net8.0\Logic.pdb
+C:\Users\Lera\Desktop\MockTest2\Logic\bin\Debug\net8.0\Entities.dll
+C:\Users\Lera\Desktop\MockTest2\Logic\bin\Debug\net8.0\Entities.pdb
+C:\Users\Lera\Desktop\MockTest2\Logic\obj\Debug\net8.0\Logic.csproj.Up2Date
+C:\Users\Lera\Desktop\MockTest2\Logic\obj\Debug\net8.0\Logic.dll
+C:\Users\Lera\Desktop\MockTest2\Logic\obj\Debug\net8.0\refint\Logic.dll
+C:\Users\Lera\Desktop\MockTest2\Logic\obj\Debug\net8.0\Logic.pdb
+C:\Users\Lera\Desktop\MockTest2\Logic\obj\Debug\net8.0\ref\Logic.dll
