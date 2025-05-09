@@ -100,5 +100,3 @@ app.MapGet("/api/country/{name}/currencies", async (string name, ICurrencyServic
 
 
 app.Run();
-
-// ldkjgslkdjf;lsdkfs;jd
